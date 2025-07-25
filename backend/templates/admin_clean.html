@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智护童行 - 管理后台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body class="bg-gray-50">
+    <div id="admin-app">
+        <!-- 登录界面 -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center">
+            <div class="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
+                <div class="text-center">
+                    <h2 class="text-3xl font-bold text-gray-900">智护童行管理后台</h2>
+                    <p class="mt-2 text-gray-600">请登录以管理内容</p>
+                </div>
+                <form @submit.prevent="login" class="space-y-6">
+                    <div>
+                        <input v-model="loginForm.username" type="text" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="用户名">
+                    </div>
+                    <div>
+                        <input v-model="loginForm.password" type="password" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="密码">
+                    </div>
+                    <div class="flex items-center">
+                        <input v-model="loginForm.remember" id="remember" type="checkbox" class="mr-2">
+                        <label for="remember" class="text-sm text-gray-600">记住我</label>
+                    </div>
+                    <div class="space-y-3">
+                        <button type="submit" :disabled="loading"
+                                class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            <span v-if="loading">登录中...</span>
+                            <span v-else>登录</span>
+                        </button>
+                        <button type="button" @click="quickLogin" :disabled="loading"
+                                class="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                            快速登录 (测试)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 管理界面 -->
+        <div v-else class="min-h-screen bg-gray-50">
+            <!-- 顶部导航栏 -->
+            <nav class="bg-white shadow-sm border-b">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between h-16">
+                        <div class="flex items-center">
+                            <h1 class="text-xl font-semibold text-gray-900">智护童行 - 内容管理后台</h1>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm text-gray-500">
+                                欢迎，{% if currentUser %}{{ currentUser.username }}{% else %}{{ '管理员' }}{% endif %}
+                            </span>
+                            <button @click="logout" class="text-sm text-red-600 hover:text-red-800">退出登录</button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- 主要内容 -->
+            <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                <div class="flex">
+                    <!-- 左侧导航 -->
+                    <div class="w-64 bg-white rounded-lg shadow-sm p-4 mr-6">
+                        <nav class="space-y-2">
+                            <button v-for="tab in sidebarTabs" :key="tab.id"
+                                    @click="activeTab = tab.id"
+                                    :class="[
+                                        'w-full text-left px-3 py-2 rounded-md text-sm font-medium',
+                                        activeTab === tab.id
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    ]">
+                                <span v-text="tab.name"></span>
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- 右侧内容区 -->
+                    <div class="flex-1">
+                        <!-- 首页展馆管理 -->
+                        <div v-if="activeTab === 'homepage'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">首页展馆管理</h3>
+                            <div class="space-y-6">
+                                <div v-for="hall in homepageHalls" :key="hall.id" class="border rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <h4 class="font-medium text-gray-900" v-text="hall.name"></h4>
+                                        <button @click="saveHallContent(hall.id)" 
+                                                class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                            保存
+                                        </button>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="hall.name" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                   placeholder="输入展馆标题">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="hall.desc" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                      placeholder="输入展馆描述"></textarea>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">图标</label>
+                                            <input type="file" @change="uploadHallIcon($event, hall.id)" 
+                                                   accept="image/*" class="w-full text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 知识学习模块管理 -->
+                        <div v-else-if="activeTab === 'knowledge'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">知识学习模块管理</h3>
+                            
+                            <!-- 知识分类选择 -->
+                            <div class="mb-6">
+                                <div class="flex space-x-2">
+                                    <button v-for="category in knowledgeCategories" :key="category.id"
+                                            @click="knowledgeActiveTab = category.id"
+                                            :class="[
+                                                'px-4 py-2 rounded-md text-sm font-medium',
+                                                knowledgeActiveTab === category.id
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            ]">
+                                        <span v-text="category.name"></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 文章管理 -->
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="font-medium text-gray-900">文章管理</h4>
+                                    <button @click="showAddArticleForm = true" 
+                                            class="bg-green-500 text-white px-4 py-2 rounded-md text-sm hover:bg-green-600">
+                                        添加文章
+                                    </button>
+                                </div>
+
+                                <!-- 添加文章表单 -->
+                                <div v-if="showAddArticleForm" class="border rounded-lg p-4 bg-gray-50">
+                                    <h5 class="font-medium mb-3">添加新文章</h5>
+                                    <div class="space-y-3">
+                                        <input v-model="newArticle.title" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                               placeholder="文章标题">
+                                        <textarea v-model="newArticle.content" rows="4"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                  placeholder="文章内容"></textarea>
+                                        <div class="flex space-x-2">
+                                            <button @click="addArticle" 
+                                                    class="bg-blue-500 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-600">
+                                                保存文章
+                                            </button>
+                                            <button @click="showAddArticleForm = false" 
+                                                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-400">
+                                                取消
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 文章列表 -->
+                                <div class="space-y-3">
+                                    <div v-for="article in getKnowledgeArticles(knowledgeActiveTab)" :key="article.id" 
+                                         class="border rounded-lg p-4">
+                                        <div class="flex justify-between items-start">
+                                            <div class="flex-1">
+                                                <h5 class="font-medium text-gray-900" v-text="article.title"></h5>
+                                                <p class="text-sm text-gray-500 mt-1" v-text="article.content.substring(0, 100) + '...'"></p>
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button @click="editArticle(article)" 
+                                                        class="text-blue-600 hover:text-blue-800 text-sm">
+                                                    编辑
+                                                </button>
+                                                <button @click="deleteArticle(article.id)" 
+                                                        class="text-red-600 hover:text-red-800 text-sm">
+                                                    删除
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 体验互动游戏管理 -->
+                        <div v-else-if="activeTab === 'games'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">体验互动游戏管理</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div v-for="game in games" :key="game.id" class="border rounded-lg p-4">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <h4 class="font-medium text-gray-900" v-text="game.name"></h4>
+                                        <button @click="saveGameContent(game.id)" 
+                                                class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                            保存
+                                        </button>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">游戏标题</label>
+                                            <input v-model="game.title" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">游戏描述</label>
+                                            <textarea v-model="game.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">游戏图片</label>
+                                            <input type="file" @change="uploadGameImage($event, game.id)" 
+                                                   accept="image/*" class="w-full text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 支持与咨询管理 -->
+                        <div v-else-if="activeTab === 'support'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">支持与咨询管理</h3>
+                            <div class="space-y-6">
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3">专家咨询设置</h4>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">咨询说明</label>
+                                            <textarea v-model="supportContent.consultation" rows="4"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                      placeholder="输入专家咨询说明"></textarea>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label>
+                                            <input v-model="supportContent.contact" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                   placeholder="输入联系方式">
+                                        </div>
+                                        <button @click="saveSupportContent" 
+                                                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                                            保存设置
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 专业培训课程管理 -->
+                        <div v-else-if="activeTab === 'training'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">专业培训课程管理</h3>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="font-medium text-gray-900">课程管理</h4>
+                                    <button @click="showAddCourseForm = true" 
+                                            class="bg-green-500 text-white px-4 py-2 rounded-md text-sm hover:bg-green-600">
+                                        添加课程
+                                    </button>
+                                </div>
+
+                                <!-- 添加课程表单 -->
+                                <div v-if="showAddCourseForm" class="border rounded-lg p-4 bg-gray-50">
+                                    <h5 class="font-medium mb-3">添加新课程</h5>
+                                    <div class="space-y-3">
+                                        <input v-model="newCourse.title" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                               placeholder="课程标题">
+                                        <textarea v-model="newCourse.description" rows="3"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                                  placeholder="课程描述"></textarea>
+                                        <input type="file" @change="selectCourseVideo" 
+                                               accept="video/*" class="w-full text-sm">
+                                        <div class="flex space-x-2">
+                                            <button @click="addCourse" 
+                                                    class="bg-blue-500 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-600">
+                                                保存课程
+                                            </button>
+                                            <button @click="showAddCourseForm = false" 
+                                                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-400">
+                                                取消
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 课程列表 -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div v-for="course in courses" :key="course.id" class="border rounded-lg p-4">
+                                        <h5 class="font-medium text-gray-900" v-text="course.title"></h5>
+                                        <p class="text-sm text-gray-500 mt-1" v-text="course.description"></p>
+                                        <div class="mt-3 flex space-x-2">
+                                            <button @click="editCourse(course)" 
+                                                    class="text-blue-600 hover:text-blue-800 text-sm">
+                                                编辑
+                                            </button>
+                                            <button @click="deleteCourse(course.id)" 
+                                                    class="text-red-600 hover:text-red-800 text-sm">
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 媒体资源管理 -->
+                        <div v-else-if="activeTab === 'media'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">媒体资源管理</h3>
+                            <div class="space-y-6">
+                                <!-- 图片上传 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3">图片上传</h4>
+                                    <div class="space-y-3">
+                                        <input type="file" @change="selectImages" 
+                                               accept="image/*" multiple class="w-full text-sm">
+                                        <button @click="uploadImages" 
+                                                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                                            上传图片
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 视频上传 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3">视频上传</h4>
+                                    <div class="space-y-3">
+                                        <input type="file" @change="selectVideos" 
+                                               accept="video/*" multiple class="w-full text-sm">
+                                        <button @click="uploadVideos" 
+                                                class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                                            上传视频
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 媒体文件列表 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3">已上传文件</h4>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div v-for="file in mediaFiles" :key="file.id" class="border rounded p-2">
+                                            <div class="aspect-square bg-gray-100 rounded mb-2 flex items-center justify-center">
+                                                <img v-if="file.type === 'image'" :src="file.url" :alt="file.name" class="max-w-full max-h-full object-cover">
+                                                <div v-else class="text-gray-500 text-xs text-center" v-text="file.name"></div>
+                                            </div>
+                                            <p class="text-xs text-gray-600 truncate" v-text="file.name"></p>
+                                            <button @click="deleteMediaFile(file.id)" 
+                                                    class="text-red-500 hover:text-red-700 text-xs mt-1">
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        
+        // 配置axios的CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        axios.defaults.headers.common['X-CSRFToken'] = csrfToken;
+        axios.defaults.headers.post['X-CSRFToken'] = csrfToken;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const loading = ref(false);
+                const username = ref('');
+                const activeTab = ref('homepage');
+                
+                const loginForm = reactive({
+                    username: '',
+                    password: '',
+                    remember: false
+                });
+
+                const sidebarTabs = [
+                    { id: 'homepage', name: '🏠 首页展馆' },
+                    { id: 'knowledge', name: '📚 知识学习模块' },
+                    { id: 'games', name: '🎮 体验互动游戏' },
+                    { id: 'support', name: '💬 支持与咨询' },
+                    { id: 'training', name: '🎓 专业培训课程' },
+                    { id: 'media', name: '📁 媒体资源管理' }
+                ];
+
+                // 内容数据
+                const knowledgeActiveTab = ref('life_care');
+                const showAddArticleForm = ref(false);
+                const showAddCourseForm = ref(false);
+
+                // 首页展馆数据
+                const homepageHalls = reactive([
+                    { id: 1, name: '自我评估系统', desc: '帮助家长了解儿童发展状况' },
+                    { id: 2, name: '知识学习模块', desc: '提供专业的儿童发展知识' },
+                    { id: 3, name: '体验互动游戏', desc: '通过游戏学习儿童护理知识' },
+                    { id: 4, name: '支持与咨询', desc: '专家咨询和社区支持服务' },
+                    { id: 5, name: '专业培训课程', desc: '专业的儿童护理培训课程' }
+                ]);
+
+                // 知识分类数据
+                const knowledgeCategories = [
+                    { id: 'life_care', name: '生活照护' },
+                    { id: 'psychology', name: '心理发展' },
+                    { id: 'safety', name: '安全防护' },
+                    { id: 'education', name: '教育引导' }
+                ];
+
+                // 文章数据
+                const articles = reactive([]);
+                const newArticle = reactive({ title: '', content: '', category: 'life_care' });
+
+                // 游戏数据
+                const games = reactive([
+                    { id: 1, name: '日常护理游戏', title: '日常护理游戏', description: '学习日常护理技能' },
+                    { id: 2, name: '安全知识游戏', title: '安全知识游戏', description: '学习安全防护知识' },
+                    { id: 3, name: '情绪管理游戏', title: '情绪管理游戏', description: '学习情绪调节技巧' },
+                    { id: 4, name: '社交技能游戏', title: '社交技能游戏', description: '提高社交交流能力' }
+                ]);
+
+                // 支持内容数据
+                const supportContent = reactive({
+                    consultation: '提供专业的儿童发展咨询服务',
+                    contact: '联系电话：400-123-4567'
+                });
+
+                // 课程数据
+                const courses = reactive([]);
+                const newCourse = reactive({ title: '', description: '', video: null });
+
+                // 媒体文件数据
+                const mediaFiles = reactive([]);
+                const selectedImages = ref([]);
+                const selectedVideos = ref([]);
+
+                // 检查登录状态
+                const checkLoginStatus = async () => {
+                    try {
+                        const response = await axios.get('/api/admin/check');
+                        if (response.data.success && response.data.logged_in) {
+                            isLoggedIn.value = true;
+                            username.value = response.data.username;
+                        }
+                    } catch (error) {
+                        console.error('检查登录状态失败:', error);
+                    }
+                };
+
+                // 登录
+                const login = async () => {
+                    loading.value = true;
+                    try {
+                        const response = await axios.post('/api/admin/login', loginForm);
+                        if (response.data.success) {
+                            isLoggedIn.value = true;
+                            username.value = loginForm.username;
+                            loginForm.username = '';
+                            loginForm.password = '';
+                            loginForm.remember = false;
+                        } else {
+                            alert(response.data.error || '登录失败');
+                        }
+                    } catch (error) {
+                        alert('登录失败: ' + (error.response?.data?.error || '网络错误'));
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+                
+                // 快速登录（测试阶段）
+                const quickLogin = async () => {
+                    loginForm.username = 'admin';
+                    loginForm.password = 'admin123';
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await login();
+                };
+
+                // 登出
+                const logout = async () => {
+                    try {
+                        await axios.post('/api/admin/logout');
+                        isLoggedIn.value = false;
+                        username.value = '';
+                    } catch (error) {
+                        console.error('登出失败:', error);
+                    }
+                };
+
+                // 内容管理方法
+                const saveHallContent = async (hallId) => {
+                    const hall = homepageHalls.find(h => h.id === hallId);
+                    if (hall) {
+                        alert(`展馆 "${hall.name}" 内容已保存！`);
+                        // 这里可以添加实际的API调用
+                    }
+                };
+
+                const uploadHallIcon = (event, hallId) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        alert(`展馆图标上传成功！`);
+                        // 这里可以添加实际的文件上传逻辑
+                    }
+                };
+
+                const getKnowledgeArticles = (category) => {
+                    return articles.filter(article => article.category === category);
+                };
+
+                const addArticle = () => {
+                    if (newArticle.title && newArticle.content) {
+                        const article = {
+                            id: Date.now(),
+                            title: newArticle.title,
+                            content: newArticle.content,
+                            category: knowledgeActiveTab.value
+                        };
+                        articles.push(article);
+                        newArticle.title = '';
+                        newArticle.content = '';
+                        showAddArticleForm.value = false;
+                        alert('文章添加成功！');
+                    }
+                };
+
+                const editArticle = (article) => {
+                    newArticle.title = article.title;
+                    newArticle.content = article.content;
+                    showAddArticleForm.value = true;
+                    // 删除原文章，等待用户保存新的
+                    const index = articles.findIndex(a => a.id === article.id);
+                    if (index > -1) {
+                        articles.splice(index, 1);
+                    }
+                };
+
+                const deleteArticle = (articleId) => {
+                    if (confirm('确定要删除这篇文章吗？')) {
+                        const index = articles.findIndex(a => a.id === articleId);
+                        if (index > -1) {
+                            articles.splice(index, 1);
+                            alert('文章删除成功！');
+                        }
+                    }
+                };
+
+                const saveGameContent = (gameId) => {
+                    const game = games.find(g => g.id === gameId);
+                    if (game) {
+                        alert(`游戏 "${game.name}" 内容已保存！`);
+                    }
+                };
+
+                const uploadGameImage = (event, gameId) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        alert('游戏图片上传成功！');
+                    }
+                };
+
+                const saveSupportContent = () => {
+                    alert('支持与咨询内容已保存！');
+                };
+
+                const addCourse = () => {
+                    if (newCourse.title && newCourse.description) {
+                        const course = {
+                            id: Date.now(),
+                            title: newCourse.title,
+                            description: newCourse.description,
+                            video: newCourse.video
+                        };
+                        courses.push(course);
+                        newCourse.title = '';
+                        newCourse.description = '';
+                        newCourse.video = null;
+                        showAddCourseForm.value = false;
+                        alert('课程添加成功！');
+                    }
+                };
+
+                const editCourse = (course) => {
+                    newCourse.title = course.title;
+                    newCourse.description = course.description;
+                    showAddCourseForm.value = true;
+                    const index = courses.findIndex(c => c.id === course.id);
+                    if (index > -1) {
+                        courses.splice(index, 1);
+                    }
+                };
+
+                const deleteCourse = (courseId) => {
+                    if (confirm('确定要删除这个课程吗？')) {
+                        const index = courses.findIndex(c => c.id === courseId);
+                        if (index > -1) {
+                            courses.splice(index, 1);
+                            alert('课程删除成功！');
+                        }
+                    }
+                };
+
+                const selectCourseVideo = (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        newCourse.video = file;
+                    }
+                };
+
+                const selectImages = (event) => {
+                    selectedImages.value = Array.from(event.target.files);
+                };
+
+                const selectVideos = (event) => {
+                    selectedVideos.value = Array.from(event.target.files);
+                };
+
+                const uploadImages = () => {
+                    if (selectedImages.value.length > 0) {
+                        selectedImages.value.forEach(file => {
+                            const mediaFile = {
+                                id: Date.now() + Math.random(),
+                                name: file.name,
+                                type: 'image',
+                                url: URL.createObjectURL(file)
+                            };
+                            mediaFiles.push(mediaFile);
+                        });
+                        selectedImages.value = [];
+                        alert('图片上传成功！');
+                    }
+                };
+
+                const uploadVideos = () => {
+                    if (selectedVideos.value.length > 0) {
+                        selectedVideos.value.forEach(file => {
+                            const mediaFile = {
+                                id: Date.now() + Math.random(),
+                                name: file.name,
+                                type: 'video',
+                                url: URL.createObjectURL(file)
+                            };
+                            mediaFiles.push(mediaFile);
+                        });
+                        selectedVideos.value = [];
+                        alert('视频上传成功！');
+                    }
+                };
+
+                const deleteMediaFile = (fileId) => {
+                    if (confirm('确定要删除这个文件吗？')) {
+                        const index = mediaFiles.findIndex(f => f.id === fileId);
+                        if (index > -1) {
+                            mediaFiles.splice(index, 1);
+                            alert('文件删除成功！');
+                        }
+                    }
+                };
+
+                onMounted(() => {
+                    checkLoginStatus();
+                });
+
+                return {
+                    isLoggedIn,
+                    loading,
+                    username,
+                    activeTab,
+                    loginForm,
+                    sidebarTabs,
+                    knowledgeActiveTab,
+                    showAddArticleForm,
+                    showAddCourseForm,
+                    homepageHalls,
+                    knowledgeCategories,
+                    articles,
+                    newArticle,
+                    games,
+                    supportContent,
+                    courses,
+                    newCourse,
+                    mediaFiles,
+                    selectedImages,
+                    selectedVideos,
+                    login,
+                    quickLogin,
+                    logout,
+                    saveHallContent,
+                    uploadHallIcon,
+                    getKnowledgeArticles,
+                    addArticle,
+                    editArticle,
+                    deleteArticle,
+                    saveGameContent,
+                    uploadGameImage,
+                    saveSupportContent,
+                    addCourse,
+                    editCourse,
+                    deleteCourse,
+                    selectCourseVideo,
+                    selectImages,
+                    selectVideos,
+                    uploadImages,
+                    uploadVideos,
+                    deleteMediaFile
+                };
+            }
+        }).mount('#admin-app');
+    </script>
+</body>
+</html>

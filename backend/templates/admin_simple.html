@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智护童行 - 管理后台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body class="bg-gray-50">
+    <div id="admin-app">
+        <!-- 登录界面 -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center">
+            <div class="max-w-md w-full space-y-8">
+                <div>
+                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                        智护童行管理后台
+                    </h2>
+                </div>
+                <form class="mt-8 space-y-6" @submit.prevent="login">
+                    <div>
+                        <input v-model="loginForm.username" type="text" required
+                               class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="用户名">
+                    </div>
+                    <div>
+                        <input v-model="loginForm.password" type="password" required
+                               class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="密码">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center">
+                            <input v-model="loginForm.remember" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <span class="ml-2 block text-sm text-gray-900">记住我</span>
+                        </label>
+                    </div>
+                    <div>
+                        <button type="submit" :disabled="loading"
+                                class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                            <span v-if="loading">登录中...</span>
+                            <span v-else>登录</span>
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" @click="quickLogin"
+                                class="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            🚀 快速登录 (测试)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 管理界面 -->
+        <div v-if="isLoggedIn" class="min-h-screen bg-gray-50">
+            <div class="flex">
+                <!-- 侧边栏 -->
+                <div class="w-64 bg-white shadow-sm">
+                    <div class="p-6">
+                        <h1 class="text-xl font-bold text-gray-900">智护童行</h1>
+                        <p class="text-sm text-gray-500 mt-1">
+                            欢迎，{% if currentUser %}{{ currentUser.username }}{% else %}管理员{% endif %}
+                        </p>
+                    </div>
+                    <nav class="mt-6">
+                        <div v-for="tab in sidebarTabs" :key="tab.id" class="px-6 py-3">
+                            <button @click="activeTab = tab.id"
+                                    :class="[
+                                        'w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                                        activeTab === tab.id
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    ]" v-text="tab.name">
+                            </button>
+                        </div>
+                    </nav>
+                    <div class="absolute bottom-6 left-6">
+                        <button @click="logout" class="text-sm text-gray-500 hover:text-gray-700">
+                            退出登录
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 主内容区 -->
+                <div class="flex-1 p-8">
+                    <!-- 首页展馆管理 -->
+                    <div v-if="activeTab === 'homepage'">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-6">首页展馆管理</h2>
+                        <div class="space-y-6">
+                            <div v-for="hall in homepageHalls" :key="hall.id" class="border rounded-lg p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <h4 class="font-medium text-gray-900" v-text="hall.name"></h4>
+                                    <button @click="saveHallContent(hall.id)" 
+                                            class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                        保存
+                                    </button>
+                                </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                        <input v-model="hall.name" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               placeholder="输入展馆标题">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                        <textarea v-model="hall.desc" rows="3"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                  placeholder="输入展馆描述"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 其他模块的简化版本 -->
+                    <div v-if="activeTab !== 'homepage'">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-6">功能开发中...</h2>
+                        <p class="text-gray-600">该模块正在开发中，敬请期待。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        
+        // 配置axios的CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        axios.defaults.headers.common['X-CSRFToken'] = csrfToken;
+        axios.defaults.headers.post['X-CSRFToken'] = csrfToken;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const loading = ref(false);
+                const username = ref('');
+                const activeTab = ref('homepage');
+                
+                const loginForm = reactive({
+                    username: '',
+                    password: '',
+                    remember: false
+                });
+
+                const sidebarTabs = [
+                    { id: 'homepage', name: '🏠 首页展馆' },
+                    { id: 'knowledge', name: '📚 知识学习模块' },
+                    { id: 'games', name: '🎮 体验互动游戏' },
+                    { id: 'support', name: '💬 支持与咨询' },
+                    { id: 'training', name: '🎓 专业培训课程' },
+                    { id: 'media', name: '📁 媒体资源管理' }
+                ];
+
+                // 首页展馆数据
+                const homepageHalls = reactive([
+                    { id: 1, name: '自我评估系统', desc: '帮助家长了解儿童发展状况' },
+                    { id: 2, name: '知识学习模块', desc: '提供专业的儿童发展知识' },
+                    { id: 3, name: '体验互动游戏', desc: '通过游戏学习儿童护理知识' },
+                    { id: 4, name: '支持与咨询', desc: '专家咨询和社区支持服务' },
+                    { id: 5, name: '专业培训课程', desc: '专业的儿童护理培训课程' }
+                ]);
+
+                const login = async () => {
+                    loading.value = true;
+                    try {
+                        const response = await axios.post('/admin/login', loginForm);
+                        if (response.data.success) {
+                            isLoggedIn.value = true;
+                            username.value = response.data.user.username;
+                        } else {
+                            alert('登录失败：' + response.data.error);
+                        }
+                    } catch (error) {
+                        alert('登录失败：' + (error.response?.data?.error || '网络错误'));
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const quickLogin = () => {
+                    loginForm.username = 'admin';
+                    loginForm.password = 'admin123';
+                    login();
+                };
+
+                const logout = async () => {
+                    try {
+                        await axios.post('/admin/logout');
+                        isLoggedIn.value = false;
+                        username.value = '';
+                        loginForm.username = '';
+                        loginForm.password = '';
+                        loginForm.remember = false;
+                    } catch (error) {
+                        console.error('登出失败:', error);
+                    }
+                };
+
+                const checkLoginStatus = async () => {
+                    try {
+                        const response = await axios.get('/admin/status');
+                        if (response.data.logged_in) {
+                            isLoggedIn.value = true;
+                            username.value = response.data.user.username;
+                        }
+                    } catch (error) {
+                        console.error('检查登录状态失败:', error);
+                    }
+                };
+
+                const saveHallContent = async (hallId) => {
+                    const hall = homepageHalls.find(h => h.id === hallId);
+                    if (hall) {
+                        alert(`展馆 "${hall.name}" 内容已保存！`);
+                        // 这里可以添加实际的API调用
+                    }
+                };
+
+                onMounted(() => {
+                    checkLoginStatus();
+                });
+
+                return {
+                    isLoggedIn,
+                    loading,
+                    username,
+                    activeTab,
+                    loginForm,
+                    sidebarTabs,
+                    homepageHalls,
+                    login,
+                    quickLogin,
+                    logout,
+                    saveHallContent
+                };
+            }
+        }).mount('#admin-app');
+    </script>
+</body>
+</html>

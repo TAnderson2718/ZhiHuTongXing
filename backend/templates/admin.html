@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智护童行 - 管理后台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body class="bg-gray-50">
+    <div id="admin-app">
+        <!-- 登录页面 -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center">
+            <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+                <h1 class="text-2xl font-bold text-center mb-6">管理后台登录</h1>
+                <form @submit.prevent="login">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">用户名</label>
+                        <input v-model="loginForm.username" type="text" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">密码</label>
+                        <div class="relative">
+                            <input v-model="loginForm.password" :type="showPassword ? 'text' : 'password'" required
+                                   class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                            <button type="button" @click="showPassword = !showPassword" 
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                <i :data-lucide="showPassword ? 'eye-off' : 'eye'" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" :disabled="loading"
+                            class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 disabled:opacity-50 mb-3">
+                        <span v-if="loading">登录中...</span><span v-else>登录</span>
+                    </button>
+                    
+                    <!-- 测试阶段快速登录按钮 -->
+                    <button type="button" @click="quickLogin" :disabled="loading"
+                            class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-md hover:bg-green-600 disabled:opacity-50">
+                        <span v-if="loading">登录中...</span><span v-else">🚀 快速登录 (测试)</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 管理界面 -->
+        <div v-else class="min-h-screen bg-gray-50">
+            <!-- 顶部导航栏 -->
+            <nav class="bg-white shadow-sm border-b">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between h-16">
+                        <div class="flex items-center">
+                            <h1 class="text-xl font-semibold text-gray-900">智护童行 - 内容管理后台</h1>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm text-gray-500">欢迎，{{ currentUser.username }}</span>
+                            <button @click="logout" class="text-sm text-red-600 hover:text-red-800">退出登录</button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                <!-- 侧边栏导航 -->
+                <div class="flex">
+                    <div class="w-64 bg-white rounded-lg shadow-sm mr-6">
+                        <div class="p-4">
+                            <h2 class="text-lg font-medium text-gray-900 mb-4">内容管理</h2>
+                            <nav class="space-y-2">
+                                <button @click="activeTab = 'homepage'" 
+                                        :class="activeTab === 'homepage' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="home" class="w-4 h-4 inline mr-2"></i>
+                                    首页展馆
+                                </button>
+                                <button @click="activeTab = 'knowledge'" 
+                                        :class="activeTab === 'knowledge' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="book-open" class="w-4 h-4 inline mr-2"></i>
+                                    知识学习模块
+                                </button>
+                                <button @click="activeTab = 'experience'" 
+                                        :class="activeTab === 'experience' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="gamepad-2" class="w-4 h-4 inline mr-2"></i>
+                                    体验互动游戏
+                                </button>
+                                <button @click="activeTab = 'support'" 
+                                        :class="activeTab === 'support' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="help-circle" class="w-4 h-4 inline mr-2"></i>
+                                    支持与咨询
+                                </button>
+                                <button @click="activeTab = 'training'" 
+                                        :class="activeTab === 'training' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="graduation-cap" class="w-4 h-4 inline mr-2"></i>
+                                    专业培训课程
+                                </button>
+                                <button @click="activeTab = 'media'" 
+                                        :class="activeTab === 'media' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+                                        class="w-full text-left px-3 py-2 rounded-md text-sm font-medium border">
+                                    <i data-lucide="image" class="w-4 h-4 inline mr-2"></i>
+                                    媒体资源管理
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+
+                    <!-- 主内容区域 -->
+                    <div class="flex-1">
+                        <!-- 首页展馆管理 -->
+                        <div v-if="activeTab === 'homepage'" class="bg-white rounded-lg shadow-sm p-6">
+                            <div class="border-b border-gray-200 pb-4 mb-6">
+                                <h3 class="text-lg font-medium text-gray-900">首页展馆内容管理</h3>
+                                <p class="text-sm text-gray-500 mt-1">管理首页五大展馆的标题、描述和引导内容</p>
+                            </div>
+                            
+                            <div class="space-y-6">
+                                <!-- 自我评估系统 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                                        <i data-lucide="clipboard-check" class="w-5 h-5 mr-2 text-blue-500"></i>
+                                        自我评估系统
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="content.homepage.assessment.title" type="text" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="content.homepage.assessment.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 知识学习模块 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                                        <i data-lucide="book-open" class="w-5 h-5 mr-2 text-green-500"></i>
+                                        知识学习模块
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="content.homepage.knowledge.title" type="text" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="content.homepage.knowledge.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 体验互动游戏 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                                        <i data-lucide="gamepad-2" class="w-5 h-5 mr-2 text-yellow-500"></i>
+                                        体验互动游戏
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="content.homepage.experience.title" type="text" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="content.homepage.experience.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 支持与咨询 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                                        <i data-lucide="help-circle" class="w-5 h-5 mr-2 text-purple-500"></i>
+                                        支持与咨询
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="content.homepage.support.title" type="text" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="content.homepage.support.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 专业培训课程 -->
+                                <div class="border rounded-lg p-4">
+                                    <h4 class="font-medium text-gray-900 mb-3 flex items-center">
+                                        <i data-lucide="graduation-cap" class="w-5 h-5 mr-2 text-red-500"></i>
+                                        专业培训课程
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                                            <input v-model="content.homepage.training.title" type="text" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                                            <textarea v-model="content.homepage.training.description" rows="3"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 flex justify-end">
+                                <button @click="saveContent('homepage')" :disabled="saving" 
+                                        class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50">
+                                    <span v-if="saving">保存中...</span><span v-else>保存更改</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 知识学习模块管理 -->
+                        <div v-if="activeTab === 'knowledge'" class="bg-white rounded-lg shadow-sm p-6">
+                            <div class="border-b border-gray-200 pb-4 mb-6">
+                                <h3 class="text-lg font-medium text-gray-900">知识学习模块管理</h3>
+                                <p class="text-sm text-gray-500 mt-1">管理四个知识分类的文章内容</p>
+                            </div>
+                            
+                            <!-- 知识分类标签 -->
+                            <div class="mb-6">
+                                <div class="border-b border-gray-200">
+                                    <nav class="-mb-px flex space-x-8">
+                                        <button @click="knowledgeActiveTab = 'life'" 
+                                                :class="knowledgeActiveTab === 'life' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                                class="py-2 px-1 border-b-2 font-medium text-sm">
+                                            生活照护
+                                        </button>
+                                        <button @click="knowledgeActiveTab = 'psychology'" 
+                                                :class="knowledgeActiveTab === 'psychology' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                                class="py-2 px-1 border-b-2 font-medium text-sm">
+                                            心理发展
+                                        </button>
+                                        <button @click="knowledgeActiveTab = 'safety'" 
+                                                :class="knowledgeActiveTab === 'safety' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                                class="py-2 px-1 border-b-2 font-medium text-sm">
+                                            安全防护
+                                        </button>
+                                        <button @click="knowledgeActiveTab = 'education'" 
+                                                :class="knowledgeActiveTab === 'education' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                                class="py-2 px-1 border-b-2 font-medium text-sm">
+                                            教育引导
+                                        </button>
+                                    </nav>
+                                </div>
+                            </div>
+
+                            <!-- 知识文章列表 -->
+                            <div class="space-y-4">
+                                <div v-for="article in getKnowledgeArticles(knowledgeActiveTab)" :key="article.id" 
+                                     class="border rounded-lg p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <h4 class="font-medium text-gray-900">{{ article.title }}</h4>
+                                            <p class="text-sm text-gray-500 mt-1">{{ article.description }}</p>
+                                        </div>
+                                        <div class="ml-4 flex space-x-2">
+                                            <button @click="editArticle(article)" 
+                                                    class="text-blue-600 hover:text-blue-800 text-sm">
+                                                编辑
+                                            </button>
+                                            <button @click="deleteArticle(article.id)" 
+                                                    class="text-red-600 hover:text-red-800 text-sm">
+                                                删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button @click="addNewArticle(knowledgeActiveTab)" 
+                                        class="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-gray-500 hover:border-gray-400 hover:text-gray-600">
+                                    <i data-lucide="plus" class="w-5 h-5 inline mr-2"></i>
+                                    添加新文章
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 其他标签页内容... -->
+                        <div v-if="activeTab === 'experience'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">体验互动游戏管理</h3>
+                            <p class="text-gray-500">管理四个互动游戏的内容和设置</p>
+                        </div>
+
+                        <div v-if="activeTab === 'support'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">支持与咨询管理</h3>
+                            <p class="text-gray-500">管理专家咨询和社区交流内容</p>
+                        </div>
+
+                        <div v-if="activeTab === 'training'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">专业培训课程管理</h3>
+                            <p class="text-gray-500">管理培训课程内容和视频资源</p>
+                        </div>
+
+                        <div v-if="activeTab === 'media'" class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">媒体资源管理</h3>
+                            <p class="text-gray-500">上传和管理图片、视频等媒体文件</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-else>
+            <!-- 顶部导航 -->
+            <nav class="bg-white shadow-sm border-b">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between h-16">
+                        <div class="flex items-center">
+                            <h1 class="text-xl font-semibold">智护童行管理后台</h1>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-gray-600">欢迎，<span v-text="username"></span></span>
+                            <button @click="logout" class="text-red-600 hover:text-red-800">
+                                <i data-lucide="log-out" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- 主要内容 -->
+            <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                <!-- 标签页导航 -->
+                <div class="mb-6">
+                    <div class="border-b border-gray-200">
+                        <nav class="-mb-px flex space-x-8">
+                            <button v-for="tab in tabs" :key="tab.id"
+                                    @click="activeTab = tab.id"
+                                    :class="[
+                                        'py-2 px-1 border-b-2 font-medium text-sm',
+                                        activeTab === tab.id
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ]">
+                                <span v-text="tab.name"></span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- 文本内容管理 -->
+                <div v-if="activeTab === 'text'" class="bg-white shadow rounded-lg p-6">
+                    <h2 class="text-lg font-medium mb-4">文本内容管理</h2>
+                    <div class="space-y-4">
+                        <div v-for="text in content.texts" :key="text.id" class="border rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <label class="block text-sm font-medium text-gray-700">
+                                    <span v-text="text.element_key"></span>
+                                </label>
+                                <button @click="updateText(text.element_key, text.content)"
+                                        class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                                    更新
+                                </button>
+                            </div>
+                            <textarea v-model="text.content" rows="3"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500">
+                            </textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图片内容管理 -->
+                <div v-if="activeTab === 'image'" class="bg-white shadow rounded-lg p-6">
+                    <h2 class="text-lg font-medium mb-4">图片内容管理</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div v-for="image in content.images" :key="image.id" class="border rounded-lg p-4">
+                            <h3 class="font-medium mb-2"><span v-text="image.image_key"></span></h3>
+                            <div class="mb-3">
+                                <img v-if="image.file_path" :src="image.file_path" :alt="image.image_key"
+                                     class="w-full h-32 object-cover rounded">
+                                <div v-else class="w-full h-32 bg-gray-200 rounded flex items-center justify-center">
+                                    <span class="text-gray-500">暂无图片</span>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <input type="file" @change="selectImageFile($event, image.image_key)"
+                                       accept="image/*" class="w-full text-sm">
+                                <button @click="replaceImage(image.image_key)"
+                                        :disabled="!selectedImageFiles[image.image_key]"
+                                        class="w-full bg-green-500 text-white px-3 py-2 rounded text-sm hover:bg-green-600 disabled:opacity-50">
+                                    <span v-if="image.file_path">替换图片</span><span v-else>上传图片</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 视频内容管理 -->
+                <div v-if="activeTab === 'video'" class="bg-white shadow rounded-lg p-6">
+                    <h2 class="text-lg font-medium mb-4">视频内容管理</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div v-for="video in content.videos" :key="video.id" class="border rounded-lg p-4">
+                            <h3 class="font-medium mb-2"><span v-text="video.video_key"></span></h3>
+                            <div class="mb-3">
+                                <video v-if="video.file_path" :src="video.file_path" controls
+                                       class="w-full h-40 rounded">
+                                </video>
+                                <div v-else class="w-full h-40 bg-gray-200 rounded flex items-center justify-center">
+                                    <span class="text-gray-500">暂无视频</span>
+                                </div>
+                            </div>
+                            <div class="space-y-2 mb-3">
+                                <input v-model="video.title" placeholder="视频标题"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded text-sm">
+                                <textarea v-model="video.description" placeholder="视频描述" rows="2"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded text-sm">
+                                </textarea>
+                            </div>
+                            <div class="space-y-2">
+                                <input type="file" @change="selectVideoFile($event, video.video_key)"
+                                       accept="video/*" class="w-full text-sm">
+                                <div class="flex space-x-2">
+                                    <button @click="replaceVideo(video.video_key)"
+                                            :disabled="!selectedVideoFiles[video.video_key]"
+                                            class="flex-1 bg-green-500 text-white px-3 py-2 rounded text-sm hover:bg-green-600 disabled:opacity-50">
+                                        <span v-if="video.file_path">替换视频</span><span v-else>上传视频</span>
+                                    </button>
+                                    <button v-if="video.file_path" @click="deleteVideo(video.video_key)"
+                                            class="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600">
+                                        删除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        
+        // 配置axios的CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        axios.defaults.headers.common['X-CSRFToken'] = csrfToken;
+        axios.defaults.headers.post['X-CSRFToken'] = csrfToken;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const loading = ref(false);
+                const username = ref('');
+                const activeTab = ref('text');
+                const showPassword = ref(false);
+                
+                const loginForm = reactive({
+                    username: '',
+                    password: ''
+                });
+
+                const tabs = [
+                    { id: 'text', name: '文本内容' },
+                    { id: 'image', name: '图片内容' },
+                    { id: 'video', name: '视频内容' }
+                ];
+
+                const content = reactive({
+                    texts: [],
+                    images: [],
+                    videos: []
+                });
+
+                const selectedImageFiles = reactive({});
+                const selectedVideoFiles = reactive({});
+
+                // 检查登录状态
+                const checkLoginStatus = async () => {
+                    try {
+                        const response = await axios.get('/api/admin/check');
+                        if (response.data.success && response.data.logged_in) {
+                            isLoggedIn.value = true;
+                            username.value = response.data.username;
+                            await loadContent();
+                        }
+                    } catch (error) {
+                        console.error('检查登录状态失败:', error);
+                    }
+                };
+
+                // 登录
+                const login = async () => {
+                    loading.value = true;
+                    try {
+                        const response = await axios.post('/api/admin/login', loginForm);
+                        if (response.data.success) {
+                            isLoggedIn.value = true;
+                            username.value = loginForm.username;
+                            await loadContent();
+                            loginForm.username = '';
+                            loginForm.password = '';
+                        } else {
+                            alert(response.data.error || '登录失败');
+                        }
+                    } catch (error) {
+                        alert('登录失败: ' + (error.response?.data?.error || '网络错误'));
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+                
+                // 快速登录（测试阶段）
+                const quickLogin = async () => {
+                    // 自动填入默认用户名和密码
+                    loginForm.username = 'admin';
+                    loginForm.password = 'admin123';
+                    
+                    // 等待一下让用户看到填入的内容
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // 执行登录
+                    await login();
+                };
+
+                // 登出
+                const logout = async () => {
+                    try {
+                        await axios.post('/api/admin/logout');
+                        isLoggedIn.value = false;
+                        username.value = '';
+                    } catch (error) {
+                        console.error('登出失败:', error);
+                    }
+                };
+
+                // 加载内容
+                const loadContent = async () => {
+                    try {
+                        const response = await axios.get('/api/admin/content');
+                        if (response.data.success) {
+                            Object.assign(content, response.data.data);
+                        }
+                    } catch (error) {
+                        console.error('加载内容失败:', error);
+                    }
+                };
+
+                // 更新文本
+                const updateText = async (elementKey, content) => {
+                    try {
+                        const response = await axios.post('/api/admin/update_text', {
+                            element_key: elementKey,
+                            content: content
+                        });
+                        if (response.data.success) {
+                            alert('更新成功！');
+                        } else {
+                            alert('更新失败: ' + response.data.error);
+                        }
+                    } catch (error) {
+                        alert('更新失败: ' + (error.response?.data?.error || '网络错误'));
+                    }
+                };
+
+                // 选择图片文件
+                const selectImageFile = (event, imageKey) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        selectedImageFiles[imageKey] = file;
+                    }
+                };
+
+                // 替换图片
+                const replaceImage = async (imageKey) => {
+                    const file = selectedImageFiles[imageKey];
+                    if (!file) return;
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('image_key', imageKey);
+
+                    try {
+                        const response = await axios.post('/api/admin/upload_image', formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        if (response.data.success) {
+                            alert('图片上传成功！');
+                            await loadContent();
+                            delete selectedImageFiles[imageKey];
+                        }
+                    } catch (error) {
+                        alert('上传失败: ' + (error.response?.data?.error || '网络错误'));
+                    }
+                };
+
+                // 选择视频文件
+                const selectVideoFile = (event, videoKey) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        selectedVideoFiles[videoKey] = file;
+                    }
+                };
+
+                // 替换视频
+                const replaceVideo = async (videoKey) => {
+                    const file = selectedVideoFiles[videoKey];
+                    if (!file) return;
+
+                    const video = content.videos.find(v => v.video_key === videoKey);
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('video_key', videoKey);
+                    formData.append('title', video?.title || '');
+                    formData.append('description', video?.description || '');
+
+                    try {
+                        const response = await axios.post('/api/admin/upload_video', formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        if (response.data.success) {
+                            alert('视频上传成功！');
+                            await loadContent();
+                            delete selectedVideoFiles[videoKey];
+                        }
+                    } catch (error) {
+                        alert('上传失败: ' + (error.response?.data?.error || '网络错误'));
+                    }
+                };
+
+                // 删除视频
+                const deleteVideo = async (videoKey) => {
+                    if (!confirm('确定要删除这个视频吗？此操作不可恢复！')) {
+                        return;
+                    }
+
+                    try {
+                        const response = await axios.post('/api/admin/delete_video', {
+                            video_key: videoKey
+                        });
+                        if (response.data.success) {
+                            alert('视频删除成功！');
+                            await loadContent();
+                        }
+                    } catch (error) {
+                        alert('删除失败: ' + (error.response?.data?.error || '网络错误'));
+                    }
+                };
+
+                onMounted(() => {
+                    checkLoginStatus();
+                    
+                    // 初始化Lucide图标
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    }
+                });
+
+                return {
+                    isLoggedIn,
+                    loading,
+                    username,
+                    activeTab,
+                    showPassword,
+                    loginForm,
+                    tabs,
+                    content,
+                    selectedImageFiles,
+                    selectedVideoFiles,
+                    login,
+                    quickLogin,
+                    logout,
+                    updateText,
+                    selectImageFile,
+                    replaceImage,
+                    selectVideoFile,
+                    replaceVideo,
+                    deleteVideo
+                };
+            }
+        }).mount('#admin-app');
+    </script>
+</body>
+</html>
